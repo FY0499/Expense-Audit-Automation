@@ -2,7 +2,7 @@
 
 I built this n8n workflow to review submitted expenses, detect possible duplicate or unusual amounts, and use AI to check the expense category and prepare a short audit note.
 
-<img width="792" height="213" alt="image" src="https://github.com/user-attachments/assets/f3fc479d-1c8c-4c2d-9c0e-666ce43c5404" />
+<img width="792" height="213" alt="Expense Audit Automation workflow demo" src="https://github.com/user-attachments/assets/f3fc479d-1c8c-4c2d-9c0e-666ce43c5404" />
 
 ## How it works
 
