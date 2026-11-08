@@ -1,0 +1,391 @@
+{
+  "name": "My workflow 5",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "تسجيل مصروف جديد",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "اسم المتجر/المورد",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "المبلغ",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "التصنيف",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "التاريخ",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        -176,
+        -48
+      ],
+      "id": "87cbf6f8-1fd9-437f-ab65-233f955cc072",
+      "name": "On form submission",
+      "webhookId": "cf5443ef-2721-4887-b0d8-9fe68206bec5"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1R_5mRq9Ct9Cb5OHJ0ayhd3MwvuX6riQZSdwoVX184M0",
+          "mode": "list",
+          "cachedResultName": "Expenses",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1R_5mRq9Ct9Cb5OHJ0ayhd3MwvuX6riQZSdwoVX184M0/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "الورقة1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1R_5mRq9Ct9Cb5OHJ0ayhd3MwvuX6riQZSdwoVX184M0/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        48,
+        -48
+      ],
+      "id": "1d606a84-6158-47de-8257-4f427a495c02",
+      "name": "Get row(s) in sheet",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JbFX4pqveR1eicFw",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// بيانات المصروف الجديد من الفورم\nconst newExpense = $('On form submission').first().json;\n\n// البيانات القديمة القادمة من Google Sheets\n// ونستبعد الـ item الفاضي الناتج عن Always Output Data\nconst history = $input.all()\n  .map(item => item.json)\n  .filter(row => row && row['اسم المتجر/المورد'] !== undefined);\n\n\n// ===== توحيد البيانات =====\n\nconst normalizeStore = (s) => {\n  return String(s ?? '').trim().toLowerCase();\n};\n\nconst normalizeAmount = (a) => {\n  const n = parseFloat(\n    String(a ?? '')\n      .replace(/,/g, '')\n      .trim()\n  );\n\n  return isNaN(n)\n    ? null\n    : Math.round(n * 100) / 100;\n};\n\nconst normalizeDate = (d) => {\n  const s = String(d ?? '').trim();\n\n  return s.length >= 10\n    ? s.slice(0, 10)\n    : s;\n};\n\n\n// ===== المصروف الجديد =====\n\nconst newStore = normalizeStore(\n  newExpense['اسم المتجر/المورد']\n);\n\nconst newAmount = normalizeAmount(\n  newExpense['المبلغ']\n);\n\nconst newDate = normalizeDate(\n  newExpense['التاريخ']\n);\n\n\n// ===== فحص التكرار =====\n\nconst duplicates = history.filter(row => {\n\n  const sameStore =\n    normalizeStore(row['اسم المتجر/المورد']) === newStore;\n\n  const sameAmount =\n    normalizeAmount(row['المبلغ']) === newAmount;\n\n  const sameDate =\n    normalizeDate(row['التاريخ']) === newDate;\n\n  return sameStore && sameAmount && sameDate;\n});\n\n\n// ===== حساب متوسط المصاريف =====\n\nconst amounts = history\n  .map(row => normalizeAmount(row['المبلغ']))\n  .filter(amount => amount !== null);\n\nlet avg = 0;\n\nif (amounts.length > 0) {\n  avg =\n    amounts.reduce((sum, amount) => sum + amount, 0)\n    / amounts.length;\n}\n\n\n// ===== فحص المبلغ غير المعتاد =====\n// أكبر من 3 أضعاف المتوسط\n\nconst isUnusual =\n  avg > 0 &&\n  newAmount !== null &&\n  newAmount > avg * 3;\n\n\n// ===== النتيجة =====\n\nreturn [\n  {\n    json: {\n      store: newExpense['اسم المتجر/المورد'],\n      amount: newAmount,\n      category: newExpense['التصنيف'],\n      date: newExpense['التاريخ'],\n\n      isDuplicate: duplicates.length > 0,\n      isUnusualAmount: isUnusual,\n\n      duplicateCount: duplicates.length,\n      averageAmount: avg.toFixed(2)\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        272,
+        -48
+      ],
+      "id": "1b1b1e5d-f0e1-452a-aedc-c96869be8bbe",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=أنت مدقق حسابات. راجع بيانات هذا المصروف وحدد إذا كان التصنيف صحيح منطقياً، واكتب ملاحظة تدقيق مختصرة. أعد النتيجة كـ JSON فقط: {\"category_seems_correct\": true/false, \"suggested_category\": \"...\", \"audit_note\": \"...\"}\n\nالمتجر: {{ $json.store }}\nالمبلغ: {{ $json.amount }}\nالتصنيف المُدخل: {{ $json.category }}\nمكرر؟: {{ $json.isDuplicate }}\nمبلغ غير معتاد؟: {{ $json.isUnusualAmount }} (المتوسط: {{ $json.averageAmount }})",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        496,
+        -48
+      ],
+      "id": "12ec8c47-a856-4e7b-ac30-fdf468baa200",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemma-4-31b-it",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        576,
+        192
+      ],
+      "id": "7b61e2bc-4fc4-4833-8956-6c4210393f56",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "Kwmp4ZGKEUrYRkMk",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// نتيجة الـ AI Agent\nconst raw = $('AI Agent').first().json.output \n  ?? $('AI Agent').first().json.text \n  ?? '';\n\n// إزالة ```json و ``` إذا Gemini رجع النتيجة داخل code block\nconst cleaned = String(raw)\n  .replace(/```json/gi, '')\n  .replace(/```/g, '')\n  .trim();\n\n// تحويل جواب الـ AI إلى JSON\nconst parsed = JSON.parse(cleaned);\n\n// نتيجة فحص التكرار والمبلغ غير المعتاد\nconst expenseCheck = $('Code in JavaScript').first().json;\n\n// دمج نتيجة الفحص مع نتيجة Gemini\nreturn [\n  {\n    json: {\n      ...expenseCheck,\n      ...parsed\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        848,
+        -48
+      ],
+      "id": "e7fdac4f-898f-4e3a-bc3a-8baa9f6d1b09",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1R_5mRq9Ct9Cb5OHJ0ayhd3MwvuX6riQZSdwoVX184M0",
+          "mode": "list",
+          "cachedResultName": "Expenses",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1R_5mRq9Ct9Cb5OHJ0ayhd3MwvuX6riQZSdwoVX184M0/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "الورقة1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1R_5mRq9Ct9Cb5OHJ0ayhd3MwvuX6riQZSdwoVX184M0/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "اسم المتجر/المورد": "={{ $json.store }}",
+            "المبلغ": "={{ $json.amount }}",
+            "التصنيف": "={{ $json.category }}",
+            "التاريخ": "={{ $json.date }}",
+            "auditNote": "={{ $json.audit_note }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "اسم المتجر/المورد",
+              "displayName": "اسم المتجر/المورد",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "المبلغ",
+              "displayName": "المبلغ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "التصنيف",
+              "displayName": "التصنيف",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "التاريخ",
+              "displayName": "التاريخ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "auditNote",
+              "displayName": "auditNote",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1072,
+        -48
+      ],
+      "id": "2320500b-42be-4116-98c6-71457839211a",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "JbFX4pqveR1eicFw",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "01e93622-0ef4-4309-8420-2563c6fdfbcc",
+              "leftValue": "={{ $('Code in JavaScript1').item.json.isDuplicate || $('Code in JavaScript1').item.json.isUnusualAmount }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1296,
+        -48
+      ],
+      "id": "3b395448-d051-41f9-8ade-a6453bac926a",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "chatId": "1120179307",
+        "text": "=⚠️ مصروف مشبوه!  المتجر: {{ $('Code in JavaScript1').item.json.store }}\n المبلغ:{{ $('Code in JavaScript1').item.json.amount }}\nمكرر: {{ $('Code in JavaScript1').item.json.isDuplicate }}\nقيمة غير معتادة:{{ $('Code in JavaScript1').item.json.isUnusualAmount }}\nملاحظة التدقيق: {{ $('Code in JavaScript1').item.json.audit_note }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1520,
+        -48
+      ],
+      "id": "b34b16bc-9409-4dc0-bc03-5da07d3e0a78",
+      "name": "Send a text message",
+      "webhookId": "e659341f-2920-4eb6-9566-35873f4b3062",
+      "credentials": {
+        "telegramApi": {
+          "id": "TCIuZRDgsP7Axb8R",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "bb021abc-40f0-4126-bb59-106997ed8da9",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "c7bc4a3d36cd56b129e06f6ace008ba13cc277cac4ebef4f9536c8399431917b"
+  },
+  "nodeGroups": [],
+  "id": "Iwa6OQyiqnxTIa4M",
+  "tags": []
+}
